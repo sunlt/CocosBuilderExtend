@@ -7,7 +7,7 @@
 	<key>canHaveChildren</key>
 	<true/>
 	<key>canBeRootNode</key>
-	<true/>
+	<false/>
 	<key>className</key>
 	<string>CCSprite</string>
 	<key>spriteFrameDrop</key>

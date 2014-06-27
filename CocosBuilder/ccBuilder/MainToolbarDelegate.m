@@ -151,6 +151,7 @@
     {
         // Add to toolbar
         NSString* groupName = [plugInGroup objectForKey:@"groupName"];
+      if ([groupName isEqualToString:@"Node"]) continue;
         [toolbar insertItemWithItemIdentifier:groupName atIndex:[[toolbar items] count]];
         
         // Remember which plug-ins have been added

@@ -22,6 +22,7 @@
  * THE SOFTWARE.
  */
 
+#import "cocos2d.h"
 #import "CCScale9Sprite.h"
 
 @interface CCBScale9Sprite : CCScale9Sprite

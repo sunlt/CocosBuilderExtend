@@ -7,7 +7,7 @@
 	<key>canHaveChildren</key>
 	<true/>
 	<key>canBeRootNode</key>
-	<true/>
+	<false/>
 	<key>className</key>
 	<string>CCLayer</string>
 	<key>properties</key>

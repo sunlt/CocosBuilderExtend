@@ -30,8 +30,6 @@
 #import "ResourceManager.h"
 #import "ResourceManagerUtil.h"
 #import "CocosBuilderAppDelegate.h"
-#import "PlayerConnection.h"
-#import "PlayerDeviceInfo.h"
 
 #import <ApplicationServices/ApplicationServices.h>
 
@@ -425,11 +423,8 @@
 
 - (NSString*) publishCacheDirectory
 {
-    NSString* uuid = [PlayerConnection sharedPlayerConnection].selectedDeviceInfo.uuid;
-    NSAssert(uuid, @"No uuid for selected device");
-    
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
-    return [[[[[paths objectAtIndex:0] stringByAppendingPathComponent:@"com.cocosbuilder.CocosBuilder"] stringByAppendingPathComponent:@"publish"]stringByAppendingPathComponent:self.projectPathHashed] stringByAppendingPathComponent:uuid];
+  NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
+  return [[[[paths objectAtIndex:0] stringByAppendingPathComponent:@"com.cocosbuilder.CocosBuilder"] stringByAppendingPathComponent:@"display"]stringByAppendingPathComponent:self.projectPathHashed];
 }
 
 - (NSString*) tempSpriteSheetCacheDirectory
@@ -501,8 +496,6 @@
         [bps addObject:num];
     }
     
-    // Send new list of bps to player
-    [[PlayerConnection sharedPlayerConnection] debugSendBreakpoints:breakpoints];
 }
 
 - (NSSet*) breakpointsForFile:(NSString*)file

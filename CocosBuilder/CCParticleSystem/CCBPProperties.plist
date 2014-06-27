@@ -9,7 +9,7 @@
 	<key>className</key>
 	<string>CCParticleSystemQuad</string>
 	<key>canBeRootNode</key>
-	<true/>
+	<false/>
 	<key>propertiesOverridden</key>
 	<array>
 		<dict>

@@ -74,9 +74,6 @@
 #import "SequencerKeyframe.h"
 #import "SequencerKeyframeEasing.h"
 #import "SequencerKeyframeEasingWindow.h"
-#import "JavaScriptDocument.h"
-#import "PlayerConnection.h"
-#import "PlayerConsoleWindow.h"
 #import "SequencerUtil.h"
 #import "SequencerStretchWindow.h"
 #import "SequencerSoundChannel.h"
@@ -86,13 +83,10 @@
 #import "MainToolbarDelegate.h"
 #import "InspectorSeparator.h"
 #import "HelpWindow.h"
-#import "APIDocsWindow.h"
 #import "NodeGraphPropertySetter.h"
 #import "CCBSplitHorizontalView.h"
 #import "SpriteSheetSettingsWindow.h"
 #import "AboutWindow.h"
-#import "CCBHTTPServer.h"
-#import "JavaScriptAutoCompleteHandler.h"
 #import "CCBFileUtil.h"
 #import "ResourceManagerPreviewView.h"
 #import "SequencerHandlerStructure.h"
@@ -127,7 +121,6 @@
 @synthesize selectedNodes;
 @synthesize loadedSelectedNodes;
 @synthesize panelVisibilityControl;
-@synthesize connection;
 @synthesize easingSlideValue;
 @synthesize easingSlideValueMax;
 @synthesize easingSlideValueMin;
@@ -233,12 +226,6 @@ static CocosBuilderAppDelegate* sharedAppDelegate;
     [toolbarDelegate addPlugInItemsToToolbar:toolbar];
 }
 
-- (void) setupPlayerConnection
-{
-    connection = [[PlayerConnection alloc] init];
-    [connection run];
-}
-
 - (void) setupResourceManager
 {
     // Load resource manager
@@ -286,14 +273,6 @@ static CocosBuilderAppDelegate* sharedAppDelegate;
     [window addChildWindow:guiWindow ordered:NSWindowAbove];
 }
 
-- (void) setupAutoCompleteHandler
-{
-    JavaScriptAutoCompleteHandler* handler = [JavaScriptAutoCompleteHandler sharedAutoCompleteHandler];
-    
-    NSString* dir = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"autoCompleteDefinitions"];
-    
-    [handler loadGlobalFilesFromDirectory:dir];
-}
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification
 {
@@ -304,8 +283,9 @@ static CocosBuilderAppDelegate* sharedAppDelegate;
     loadedSelectedNodes = [[NSMutableArray alloc] init];
     
     sharedAppDelegate = self;
+  
+    jsControlled = YES;
     
-    [self setupAutoCompleteHandler];
     
     [[NSExceptionHandler defaultExceptionHandler] setExceptionHandlingMask: NSLogUncaughtExceptionMask | NSLogUncaughtSystemExceptionMask | NSLogUncaughtRuntimeErrorMask];
     
@@ -350,8 +330,6 @@ static CocosBuilderAppDelegate* sharedAppDelegate;
 
     [self setupResourceManager];
     [self setupGUIWindow];
-    
-    [self setupPlayerConnection];
     
     self.showGuides = YES;
     self.snapToGuides = YES;
@@ -1356,14 +1334,9 @@ static BOOL hideAllToNextSeparator;
             return;
         }
     }
-    
-    [[JavaScriptAutoCompleteHandler sharedAutoCompleteHandler] removeLocalFiles];
-    
+  
     [window setTitle:@"CocosBuilder"];
-
-    // Stop local web server
-    [[CCBHTTPServer sharedHTTPServer] stop];
-    
+  
     // Remove resource paths
     self.projectSettings = NULL;
     [resManager removeAllDirectories];
@@ -1400,20 +1373,10 @@ static BOOL hideAllToNextSeparator;
     
     if (!success) return NO;
     
-    // Load autocompletions for all JS files
-    NSArray* jsFiles = [CCBFileUtil filesInResourcePathsWithExtension:@"js"];
-    for (NSString* jsFile in jsFiles)
-    {
-        [[JavaScriptAutoCompleteHandler sharedAutoCompleteHandler] loadLocalFile:[resManager toAbsolutePath:jsFile]];
-    }
-    
+ 
     // Update the title of the main window
     [window setTitle:[NSString stringWithFormat:@"CocosBuilder - %@", [fileName lastPathComponent]]];
 
-    // Start local web server
-    NSString* docRoot = [projectSettings.publishDirectoryHTML5 absolutePathFromBaseDirPath:[projectSettings.projectPath stringByDeletingLastPathComponent]];
-    [[CCBHTTPServer sharedHTTPServer] start:docRoot];
-    
     // Open ccb file for project if there is only one
     NSArray* resPaths = project.absoluteResourcePaths;
     if (resPaths.count > 0)
@@ -1523,14 +1486,6 @@ static BOOL hideAllToNextSeparator;
     {
         [self modalDialogTitle:@"Publish failed" message:@"Failed to publish the document, please try to publish to another location."];
     }
-}
-
-- (void) newJSFile:(NSString*) fileName
-{
-    NSData* jsData = [@"" dataUsingEncoding:NSUTF8StringEncoding];
-    [jsData writeToFile:fileName atomically:YES];
-    
-    [self openJSFile:fileName];
 }
 
 - (void) newFile:(NSString*) fileName type:(NSString*)type resolutions: (NSMutableArray*) resolutions;
@@ -1661,38 +1616,6 @@ static BOOL hideAllToNextSeparator;
 	{
 		[self openFiles:filenames];
 	}
-}
-
-- (void) openJSFile:(NSString*) fileName
-{
-    [self openJSFile:fileName highlightLine:0];
-}
-
-- (void) openJSFile:(NSString*) fileName highlightLine:(int)line
-{
-    NSURL* docURL = [[[NSURL alloc] initFileURLWithPath:fileName] autorelease];
-    
-    JavaScriptDocument* jsDoc = [[NSDocumentController sharedDocumentController] documentForURL:docURL];
-    
-    if (!jsDoc)
-    {
-        jsDoc = [[[JavaScriptDocument alloc] initWithContentsOfURL:docURL ofType:@"JavaScript" error:NULL] autorelease];
-        [[NSDocumentController sharedDocumentController] addDocument:jsDoc];
-        [jsDoc makeWindowControllers];
-    }
-    
-    [jsDoc showWindows];
-    [jsDoc setHighlightedLine:line];
-}
-
-- (void) resetJSFilesLineHighlight
-{
-    NSArray* jsDocs = [[NSDocumentController sharedDocumentController] documents];
-    for (int i = 0; i < [jsDocs count]; i++)
-    {
-        JavaScriptDocument* doc = [jsDocs objectAtIndex:i];
-        [doc setHighlightedLine:0];
-    }
 }
 
 #pragma mark Undo
@@ -2244,18 +2167,6 @@ static BOOL hideAllToNextSeparator;
 
 - (IBAction) saveAllDocuments:(id)sender
 {
-    // Save all JS files
-    //[[NSDocumentController sharedDocumentController] saveAllDocuments:sender]; //This API have no effects
-    NSArray* JSDocs = [[NSDocumentController sharedDocumentController] documents];
-    for (int i = 0; i < [JSDocs count]; i++)
-    {
-        NSDocument* doc = [JSDocs objectAtIndex:i];
-        if (doc.isDocumentEdited)
-        {
-            [doc saveDocument:sender];
-        }
-    }
-    
     // Save all CCB files
     CCBDocument* oldCurDoc = currentDocument;
     NSArray* docs = [tabView tabViewItems];
@@ -2281,11 +2192,7 @@ static BOOL hideAllToNextSeparator;
         return;
     }
     
-    if (run && !browser && ![[PlayerConnection sharedPlayerConnection] connected])
-    {
-        [self modalDialogTitle:@"No Player Connected" message:@"There is no CocosPlayer connected to CocosBuilder. Make sure that a player is running and that it has the same pairing number as CocosBuilder."];
-        return;
-    }
+   
     
     CCBWarnings* warnings = [[[CCBWarnings alloc] init] autorelease];
     warnings.warningsDescription = @"Publisher Warnings";
@@ -2339,44 +2246,12 @@ static BOOL hideAllToNextSeparator;
     
     [[publishWarningsWindow window] setIsVisible:(warnings.warnings.count > 0)];
     
-    // Run in Browser
-    if (publisher.runAfterPublishing && publisher.browser)
-    {
-        [[CCBHTTPServer sharedHTTPServer] openBrowser:publisher.browser];
-        [self updateDefaultBrowser];
-    }
-    
-    // Run in CocosPlayer
-    if (publisher.runAfterPublishing && !publisher.browser)
-    {
-        [self runProject:self];
-    }
+
     
     [publisher release];
 }
 
-- (IBAction)openCocosPlayerConsole:(id)sender
-{
-    if (!playerConsoleWindow)
-    {
-        playerConsoleWindow = [[PlayerConsoleWindow alloc] initWithWindowNibName:@"PlayerConsoleWindow"];
-    }
-    [playerConsoleWindow.window makeKeyAndOrderFront:self];
-}
 
-- (IBAction)runProject:(id)sender
-{
-    // Open CocosPlayer console
-    [self openCocosPlayerConsole:sender];
-    
-    [playerConsoleWindow cleanConsole];
-    
-    if ([[PlayerConnection sharedPlayerConnection] connected])
-    {
-        [[PlayerConnection sharedPlayerConnection] sendProjectSettings:projectSettings];
-        [[PlayerConnection sharedPlayerConnection] sendRunCommand];
-    }
-}
 
 - (IBAction) menuPublishProject:(id)sender
 {
@@ -2533,23 +2408,6 @@ static BOOL hideAllToNextSeparator;
     }];
 }
 
-- (IBAction) newJSDocument:(id)sender
-{
-    NSLog(@"New JS Doc");
-    
-    NSSavePanel* saveDlg = [NSSavePanel savePanel];
-    [saveDlg setAllowedFileTypes:[NSArray arrayWithObject:@"js"]];
-    
-    SavePanelLimiter* limiter = [[SavePanelLimiter alloc] initWithPanel:saveDlg resManager:resManager];
-    
-    [saveDlg beginSheetModalForWindow:window completionHandler:^(NSInteger result) {
-        if (result == NSOKButton)
-        {
-            [self newJSFile:[[saveDlg URL] path]];
-        }
-        [limiter release];
-    }];
-}
 
 - (IBAction) newDocument:(id)sender
 {
@@ -3886,16 +3744,6 @@ static BOOL hideAllToNextSeparator;
     }
     
     [[helpWindow window] makeKeyAndOrderFront:self];
-}
-
-- (IBAction)showAPIDocs:(id)sender
-{
-    if(!apiDocsWindow)
-    {
-        apiDocsWindow = [[APIDocsWindow alloc] initWithWindowNibName:@"APIDocsWindow"];
-    }
-    
-    [[apiDocsWindow window] makeKeyAndOrderFront:self];
 }
 
 - (IBAction)reportBug:(id)sender
