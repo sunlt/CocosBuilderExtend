@@ -755,7 +755,14 @@
     
     for (int i = 0; i < [stringCache count]; i++)
     {
-        [self writeUTF8:[stringCache objectAtIndex:i]];
+      NSString *str = [stringCache objectAtIndex:i];
+      //ccbfile的特殊处理
+      if ([[str pathExtension] isEqualToString:@"ccb"] == YES ) {
+        NSString *_str = [NSString stringWithFormat:@"ccb/%@",str];
+        str = _str;
+        NSLog(@"cbb_file : %@",str);
+      }
+      [self writeUTF8:str];
     }
 }
 
